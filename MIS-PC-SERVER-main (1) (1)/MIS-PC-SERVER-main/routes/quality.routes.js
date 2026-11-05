@@ -1,0 +1,40 @@
+import express from "express";
+
+import {
+  getReworkStations,
+  createReworkStation,
+  updateReworkStation,
+  updateReworkStationStatus,
+  startRework,
+  completeRework,
+  approveRework,
+  sendBackRework,
+  rejectProduct,
+  getQualityHistory,
+} from "../controller/quality.controller.js";
+
+import {
+  getQualityItems,
+} from "../controller/adminQuality.controller.js";
+
+const router = express.Router();
+
+router.get("/stations", getReworkStations);
+router.post("/stations", createReworkStation);
+router.put("/stations/:id", updateReworkStation);
+router.patch("/stations/:id/status", updateReworkStationStatus);
+
+router.post("/rework/start", startRework);
+router.post("/rework/complete", completeRework);
+
+router.post("/qa/approve", approveRework);
+router.post("/qa/send-back", sendBackRework);
+
+router.post("/reject", rejectProduct);
+
+router.get("/history/:serialNo", getQualityHistory);
+
+
+router.get("/items", getQualityItems);
+
+export default router;

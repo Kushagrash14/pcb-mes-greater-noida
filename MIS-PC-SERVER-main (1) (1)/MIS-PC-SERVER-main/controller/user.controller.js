@@ -1,0 +1,456 @@
+import pool from "../DB/config/mysql.config.js";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+
+// createUser
+
+export const createUser = async (req, res) => {
+  try {
+    const {
+      username,
+      password,
+      name,
+      email,
+      role,
+      factory_id,
+      line_id,
+      line_name,
+      stage_id,
+    } = req.body;
+
+    if (!username || !password || !name || !role) {
+      return res.status(400).json({
+        success: false,
+        message: "Username, password, name and role are required",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const [result] = await pool.query(
+      `INSERT INTO users
+        (username, password, name, email, role, factory_id, line_id, line_name, stage_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        username,
+        hashedPassword,
+        name,
+        email || null,
+        role,
+        factory_id || null,
+        line_id || null,
+        line_name?.trim() || null,
+        stage_id || null,
+      ]
+    );
+
+    return res.status(201).json({
+      success: true,
+      userId: result.insertId,
+      message: "User created successfully",
+    });
+  } catch (err) {
+    console.error("CREATE USER ERROR:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+
+export const loginUser = async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    const [rows] = await pool.query("SELECT * FROM users WHERE username = ?", [username]);
+
+    if (rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: "USER NOT FOUND",
+      });
+    }
+
+    const user = rows[0];
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid username or password",
+      });
+    }
+
+    const token = jwt.sign(
+      {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+      }
+    );
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    // fetch factory/line/stage same as getMe
+    const [detailRows] = await pool.query(
+      `
+      SELECT
+        u.id,
+        u.username,
+        u.name,
+        u.email,
+        u.role,
+        u.stage_id,
+
+        f.id   AS factory_id,
+        f.name AS factory_name,
+
+        l.id   AS line_id,
+        l.name AS line_name,
+
+        s.id   AS stage_id_full,
+        s.name AS stage_name
+
+      FROM users u
+      LEFT JOIN factories f ON u.factory_id = f.id
+      LEFT JOIN production_lines l ON u.line_id = l.id
+      LEFT JOIN stages s ON u.stage_id = s.id
+      WHERE u.id = ?
+      `,
+      [user.id]
+    );
+
+    const row = detailRows[0];
+
+    return res.status(200).json({
+      token,
+      success: true,
+      message: "Login successful",
+      user: {
+        id: row.id,
+        username: row.username,
+        name: row.name,
+        email: row.email,
+        role: row.role,
+
+        factory: row.factory_id
+          ? { id: row.factory_id, name: row.factory_name }
+          : null,
+
+        line: row.line_id
+          ? { id: row.line_id, name: row.line_name }
+          : null,
+
+        stage: row.stage_id_full
+          ? { id: row.stage_id_full, name: row.stage_name }
+          : null,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+export const getMe = async (req, res) => {
+  try {
+    const user = req.user;
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated",
+      });
+    }
+
+    const [rows] = await pool.query(
+    `
+    SELECT
+      u.id,
+      u.username,
+      u.name,
+      u.email,
+      u.role,
+      u.is_active,
+      u.created_at,
+
+      f.id   AS factory_id,
+      f.name AS factory_name,
+
+      l.id   AS line_id,
+      l.name AS line_name,
+
+      s.id   AS stage_id,
+      s.name AS stage_name
+
+    FROM users u
+
+    LEFT JOIN factories f
+      ON u.factory_id = f.id
+
+    LEFT JOIN production_lines l
+      ON u.line_id = l.id
+
+    LEFT JOIN stages s
+      ON u.stage_id = s.id
+
+    WHERE u.id = ?
+    `,
+    [user.id]
+  );
+
+    if (!rows.length) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const row = rows[0];
+
+    return res.status(200).json({
+      success: true,
+      user: {
+        id: row.id,
+        username: row.username,
+        name: row.name,
+        email: row.email,
+        role: row.role,
+        is_active: row.is_active,
+        created_at: row.created_at,
+
+        factory: row.factory_id
+          ? {
+              id: row.factory_id,
+              name: row.factory_name,
+            }
+          : null,
+
+        line: row.line_id
+          ? {
+              id: row.line_id,
+              name: row.line_name,
+            }
+          : null,
+
+        stage: row.stage_id
+          ? {
+              id: row.stage_id,
+              name: row.stage_name,
+            }
+          : null,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+export const logout = (req, res) => {
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+  });
+
+  return res.status(200).json({ success: true, message: "Logged out successfully" });
+};
+
+// getUsers
+export const getUsers = async (req, res) => {
+  try {
+    
+      const [users] = await pool.query(`
+        SELECT
+          u.id,
+          u.username,
+          u.name,
+          u.email,
+          u.role,
+          u.factory_id,
+          f.name AS factory_name,
+          u.line_id,
+          u.line_name AS assigned_line_name,
+          pl.name AS production_line_name,
+          u.stage_id,
+          s.name AS stage_name,
+          u.is_active,
+          u.created_at
+        FROM users u
+        LEFT JOIN factories f ON f.id = u.factory_id
+        LEFT JOIN production_lines pl ON pl.id = u.line_id
+        LEFT JOIN stages s ON s.id = u.stage_id
+        ORDER BY u.id DESC
+      `);
+
+
+    return res.status(200).json(users);
+  } catch (error) {
+    console.log("ERR IN GET USERS:", error);
+
+    return res.status(500).json({
+      message: error.message,
+    });
+  }
+};
+
+export const updateUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // updateUser — just extend allowedFields
+    const allowedFields = [
+      "username",
+      "name",
+      "email",
+      "role",
+      "factory_id",
+      "line_id",
+      "line_name",
+      "stage_id",
+      "is_active",
+    ];
+
+    const fields = [];
+    const values = [];
+
+    for (const key in req.body) {
+      if (allowedFields.includes(key)) {
+        fields.push(`${key} = ?`);
+        values.push(req.body[key]);
+      }
+    }
+
+    if (!fields.length) {
+      return res.status(400).json({
+        message: "No fields to update",
+      });
+    }
+
+    values.push(id);
+
+    const [result] = await pool.query(
+      `
+      UPDATE users
+      SET ${fields.join(", ")}
+      WHERE id = ?
+      `,
+      values
+    );
+
+    if (!result.affectedRows) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      message: "User updated successfully",
+    });
+  } catch (error) {
+    console.log("ERR IN UPDATE USER:", error);
+
+    return res.status(500).json({
+      message: error.message,
+    });
+  }
+};
+
+export const changePassword = async (
+  req,
+  res
+) => {
+  try {
+    const { id } = req.params;
+    const { password } = req.body;
+
+    const hashedPassword = await bcrypt.hash(
+      password,
+      10
+    );
+
+    await pool.query(
+      `
+      UPDATE users
+      SET password = ?
+      WHERE id = ?
+      `,
+      [hashedPassword, id]
+    );
+
+    return res.status(200).json({
+      message: "Password updated successfully",
+    });
+  } catch (error) {
+    console.log(
+      "ERR IN CHANGE PASSWORD:",
+      error
+    );
+
+    return res.status(500).json({
+      message: error.message,
+    });
+  }
+};
+
+
+export const deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const [result] = await pool.query(
+      `DELETE FROM users WHERE id = ?`,
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "User permanently deleted successfully",
+    });
+  } catch (error) {
+    console.error("ERR IN DELETE USER:", error);
+
+    // Foreign-key constraint errors may mean this user is referenced
+    // by scan history or other records. Do not delete those records.
+    if (error.code === "ER_ROW_IS_REFERENCED_2") {
+      return res.status(409).json({
+        success: false,
+        message:
+          "Cannot permanently delete this user because other records reference them. Preserve the related history.",
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

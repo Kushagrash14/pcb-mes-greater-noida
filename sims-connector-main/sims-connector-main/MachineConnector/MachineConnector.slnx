@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="MachineConnector.csproj" />
+  <Project Path="MachineConnector.InstallerHelper/MachineConnector.InstallerHelper.csproj" />
+</Solution>

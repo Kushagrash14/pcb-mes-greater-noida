@@ -1,0 +1,10 @@
+.env
+/node_modules
+/Certs
+/certs
+
+certs/
+Certs/
+
+certs/*
+Certs/*
