@@ -2,6 +2,13 @@
 -- Migration 021: Line-aware product stage flows.
 -- Backfill line_id from the existing stage-to-line mapping.
 
+-- 0. Clean up line_id if partially added in previous failed run
+SET @col = (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'product_stage_flow' AND COLUMN_NAME = 'line_id');
+SET @drop_col = IF(@col > 0, 'ALTER TABLE product_stage_flow DROP COLUMN line_id', 'SELECT 1');
+PREPARE stmt_drop FROM @drop_col;
+EXECUTE stmt_drop;
+DEALLOCATE PREPARE stmt_drop;
+
 -- 1. Add line_id to product_stage_flow.
 ALTER TABLE product_stage_flow
     ADD COLUMN line_id INT NULL AFTER product_id;
@@ -11,13 +18,13 @@ UPDATE product_stage_flow psf
 JOIN stages s ON s.id = psf.stage_id
 SET psf.line_id = s.line_id;
 
--- 3. Stop if any flow could not be mapped.
--- Verify this query returns 0 before continuing:
--- SELECT COUNT(*) FROM product_stage_flow WHERE line_id IS NULL;
-
--- 4. Require a valid line for every flow.
+-- 3. Require a valid line for every flow.
 ALTER TABLE product_stage_flow
     MODIFY COLUMN line_id INT NOT NULL;
+
+-- 4. Temporary index to support foreign key fk_psf_product
+ALTER TABLE product_stage_flow
+    ADD INDEX idx_temp_product (product_id);
 
 -- 5. Remove old product-only unique indexes.
 ALTER TABLE product_stage_flow
@@ -49,3 +56,7 @@ ALTER TABLE product_stage_flow
     ADD CONSTRAINT fk_psf_line
         FOREIGN KEY (line_id)
         REFERENCES production_lines(id);
+
+-- 8. Remove temporary index
+ALTER TABLE product_stage_flow
+    DROP INDEX idx_temp_product;
