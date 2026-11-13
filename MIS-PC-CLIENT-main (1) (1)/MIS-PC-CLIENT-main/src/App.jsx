@@ -1,5 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 
+
+import Home from "./Home.jsx";
 import Login from "./Authentication/Login/LoginForm.jsx";
 
 import UserProtected from "./Authentication/ProtectedRoutes/UserProtected.jsx";
@@ -46,7 +48,7 @@ function App() {
     <Routes>
 
       {/* Landing */}
-      <Route path="/" element={<div>This is Landing Page...</div>} />
+      <Route path="/" element={<Home />} />
 
       {/* Login */}
       <Route path="/login" element={<Login />} />

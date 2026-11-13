@@ -1,60 +1,32 @@
-import {
-  shiftInfo,
-  kpiData,
-  summaryData,
-  factoryOverviewData,
-  productionFlowData,
-  pipelineStages,
-  lineStatusData,
-  recentActivityData,
-  alertsData,
-  hourlyProductionData,
-  dailyProductionData,
-  efficiencyTrendData,
-  stageDistributionData,
-} from "../dashboardData";
+import api from "../../../../services/API/api";
 
-const simulateDelay = (data, ms = 500) =>
-  new Promise((resolve) => setTimeout(() => resolve(data), ms));
+const dashboardService = {
+  getOverview: async (date, factoryId = null) => {
+    const params = { date };
 
-// Each method below is a 1:1 stand-in for a future backend endpoint.
-// Swap the simulateDelay(...) body for a real fetch/axios call when the API is ready —
-// the return shape should stay the same so components never need to change.
-export const dashboardService = {
-  getShiftInfo: () => simulateDelay(shiftInfo),
-  getKpiData: () => simulateDelay(kpiData),
-  getSummaryData: () => simulateDelay(summaryData),
-  getFactoryOverview: () => simulateDelay(factoryOverviewData),
-  getProductionFlow: () => simulateDelay(productionFlowData),
-  getPipelineStages: () => simulateDelay(pipelineStages),
-  getLineStatus: () => simulateDelay(lineStatusData),
-  getRecentActivity: () => simulateDelay(recentActivityData),
-  getAlerts: () => simulateDelay(alertsData),
-  getHourlyProduction: () => simulateDelay(hourlyProductionData),
-  getDailyProduction: () => simulateDelay(dailyProductionData),
-  getEfficiencyTrend: () => simulateDelay(efficiencyTrendData),
-  getStageDistribution: () => simulateDelay(stageDistributionData),
+    if (factoryId) {
+      params.factoryId = factoryId;
+    }
 
-  getAllDashboardData: async () => {
-    const [shift, kpis, summary, factory, flow, pipeline, lines, activity, alerts, hourly, daily, efficiency, stageDist] =
-      await Promise.all([
-        simulateDelay(shiftInfo),
-        simulateDelay(kpiData),
-        simulateDelay(summaryData),
-        simulateDelay(factoryOverviewData),
-        simulateDelay(productionFlowData),
-        simulateDelay(pipelineStages),
-        simulateDelay(lineStatusData),
-        simulateDelay(recentActivityData),
-        simulateDelay(alertsData),
-        simulateDelay(hourlyProductionData),
-        simulateDelay(dailyProductionData),
-        simulateDelay(efficiencyTrendData),
-        simulateDelay(stageDistributionData),
-      ]);
+    const response = await api.get("/dashboard/overview", {
+      params,
+    });
 
-    return { shift, kpis, summary, factory, flow, pipeline, lines, activity, alerts, hourly, daily, efficiency, stageDist };
+    return response.data.data;
   },
+
+  getHourlyProduction: async (date, period, factoryId = null) => {
+    const params = { date, period };
+
+    if (factoryId) params.factoryId = factoryId;
+
+    const response = await api.get("/dashboard/hourly-production", {
+      params,
+    });
+
+    return response.data.data;
+  },
+
 };
 
 export default dashboardService;
