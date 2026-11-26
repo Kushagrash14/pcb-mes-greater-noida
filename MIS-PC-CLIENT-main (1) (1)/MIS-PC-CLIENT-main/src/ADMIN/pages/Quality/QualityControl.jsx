@@ -355,15 +355,39 @@ const QualityControl = () => {
       title: "Action",
       key: "action",
       fixed: "right",
-      width: 130,
+      width: 280,
       render: (_, record) => (
-        <Button
-          type="link"
-          icon={<Eye size={15} />}
-          onClick={() => openDetails(record)}
-        >
-          Inspect
-        </Button>
+        <Space size={0} wrap>
+          <Button
+            type="link"
+            icon={<Eye size={15} />}
+            onClick={() => openDetails(record)}
+          >
+            Inspect
+          </Button>
+
+          {record.status === "PENDING_QA" && (
+            <>
+              <Button
+                type="link"
+                icon={<CheckCircle2 size={15} />}
+                style={{ color: "#16A34A" }}
+                onClick={() => openActionModal("APPROVE", record)}
+              >
+                Approve
+              </Button>
+
+              <Button
+                type="link"
+                danger
+                icon={<RotateCcw size={15} />}
+                onClick={() => openActionModal("SEND_BACK", record)}
+              >
+                Send Back
+              </Button>
+            </>
+          )}
+        </Space>
       ),
     },
   ];
@@ -503,12 +527,36 @@ const qualityHistory =
   const failureSummary = details.failure_summary || {};
   const boxes = details.boxes || [];
 
+  // Prefer the Quality queue row the admin opened. The same serial can exist on
+  // multiple production orders (e.g. ACTIVE on one PO, PENDING_QA on another),
+  // so a bare serial match often picks the wrong status and hides Admin Review.
   const orderItem =
     orderItems.find(
+      (item) =>
+        selectedItem?.id != null &&
+        Number(item.production_order_item_id) === Number(selectedItem.id)
+    ) ||
+    orderItems.find(
+      (item) =>
+        selectedItem?.production_order_id != null &&
+        Number(item.production_order_id) ===
+          Number(selectedItem.production_order_id) &&
+        item.serial_no === (selectedItem.serial_no || production.serial_no)
+    ) ||
+    orderItems.find(
+      (item) =>
+        item.serial_no === (selectedItem?.serial_no || production.serial_no) &&
+        selectedItem?.status &&
+        item.item_status === selectedItem.status
+    ) ||
+    orderItems.find(
       (item) => item.serial_no === production.serial_no
-    ) || orderItems[0] || {};
+    ) ||
+    orderItems[0] ||
+    {};
 
-  const currentStatus = orderItem.item_status || production.status;
+  const currentStatus =
+    selectedItem?.status || orderItem.item_status || production.status;
 
   const successfulScans = scans.filter(
     (scan) => scan.status === "SUCCESS"
